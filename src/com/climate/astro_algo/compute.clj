@@ -2,10 +2,9 @@
   "Functions to calculate local coordinates and passages
   References:
   [1] Meeus, Jean. _Astronomical Algorithms_ 2nd Ed. Willman-Bell, Inc. 1998."
-  (:require
-    [clj-time.core :as ct]
-    [com.climate.astro-algo.date-utils :as du]
-    [com.climate.astro-algo.conversions :as conv]))
+  (:require [clj-time.core :as ct]
+            [com.climate.astro-algo.date-utils :as du]
+            [com.climate.astro-algo.conversions :as conv]))
 
 (defn- nutation-correction-factor
   "Calculate the longitude of the ascending node of the Moon's orbit
@@ -15,7 +14,7 @@
   [t]
   ; simplified from [1] Ch.22
   (-> (- 125.04 (* 1934.136 t))
-    conv/deg->rad))
+      conv/deg->rad))
 
 (defn nutation-in-longitude
   "Calculate the nutation in longitude
@@ -41,11 +40,11 @@
   ; since IAU spec uses degrees, arcminutes, arcseconds
   ; first compute arcseconds component
   (let [mean-obliquity (-> (+ 21.448
-                             (* -46.8150 t)
-                             (* -0.00059 (Math/pow t 2))
-                             (* 0.001813 (Math/pow t 3)))
-                         ; then add in degrees & arcminutes
-                         (#(conv/angle->deg 23 26 %)))] ; [1] Eqn (22.2)
+                              (* -46.8150 t)
+                              (* -0.00059 (Math/pow t 2))
+                              (* 0.001813 (Math/pow t 3)))
+                           ; then add in degrees & arcminutes
+                           (#(conv/angle->deg 23 26 %)))] ; [1] Eqn (22.2)
     (+ mean-obliquity (nutation-in-obliquity t))))
 
 (defn mean-sidereal-time
@@ -56,13 +55,13 @@
   (let [jd (du/julian-day dt)
         t (du/centuries-since-j2000 dt)]
     (-> (+ 280.46061837
-          (* 360.98564736629
-             (- jd 2451545))
-          (* 0.000387933
-             (Math/pow t 2))
-          (/ (Math/pow t 3)
-             -38710000)) ; [1] Eqn (12.4)
-      (mod 360))))
+           (* 360.98564736629
+              (- jd 2451545))
+           (* 0.000387933
+              (Math/pow t 2))
+           (/ (Math/pow t 3)
+              -38710000)) ; [1] Eqn (12.4)
+        (mod 360))))
 
 (defn apparent-sidereal-time
   "Calculate apparent sidereal time at Greenwich
@@ -73,4 +72,4 @@
     (-> (+ (mean-sidereal-time dt)
            (* (nutation-in-longitude t)
               (Math/cos (conv/deg->rad (true-obliquity t)))))
-      (mod 360))))
+        (mod 360))))

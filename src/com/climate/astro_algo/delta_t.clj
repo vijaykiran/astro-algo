@@ -1,8 +1,7 @@
 (ns com.climate.astro-algo.delta-t
   "Get historical and extrapolated values for Delta T"
-  (:require
-    [clj-time.core :as ct])
-  (:use [clojure.tools.logging :only (warn)]))
+  (:require [clj-time.core :as ct]
+            [clojure.tools.logging :refer (warn)]))
 
 ; Values from _Astronomical Almanac for the Year 2013_ page K9
 ; by U.S. Nautical Almanac Office
@@ -50,5 +49,5 @@
                                                         (get DELTA-T-MAP year-key))
               :else (get DELTA-T-MAP year))]
     (-> (* secs 1000)
-      int
-      ct/millis)))
+        int
+        ct/millis)))

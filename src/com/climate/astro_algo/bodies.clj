@@ -2,13 +2,12 @@
   "Protocol, classes and functions for celestial bodies
   References:
   [1] Meeus, Jean. _Astronomical Algorithms_ 2nd Ed. Willman-Bell, Inc. 1998."
-  (:require
-    [clj-time.core :as ct]
-    [clj-time.coerce :refer [to-date-time]]
-    [com.climate.astro-algo.delta-t :refer [delta-t]]
-    [com.climate.astro-algo.date-utils :as du]
-    [com.climate.astro-algo.conversions :as conv]
-    [com.climate.astro-algo.compute :as compute])
+  (:require [clj-time.core :as ct]
+            [clj-time.coerce :refer [to-date-time]]
+            [com.climate.astro-algo.delta-t :refer [delta-t]]
+            [com.climate.astro-algo.date-utils :as du]
+            [com.climate.astro-algo.conversions :as conv]
+            [com.climate.astro-algo.compute :as compute])
   (:import [org.joda.time DateTimeConstants]))
 
 ;; celestial bodies
@@ -42,10 +41,10 @@
     ; with the simplifications provided in [1] Ch.25
     (let [t (-> dt du/ut->td du/centuries-since-j2000)
           ;; mean equinox of the date, degrees
-          l_0 (-> (+ 280.46646
-                    (* 36000.76983 t)
-                    (* 0.0003032 (Math/pow t 2))) ; [1] Eqn (25.2)
-                (mod 360))
+          l_0 (mod (+ 280.46646
+                      (* 36000.76983 t)
+                      (* 0.0003032 (Math/pow t 2))
+                      360 )) ; [1] Eqn (25.2)
           ; mean anomoly, degrees
           m (+ 357.52911
                (* 35999.05029 t)
@@ -131,7 +130,7 @@
     :transit (org.joda.time.DateTime UTC)
     :setting (org.joda.time.DateTime UTC)"
   [body date lon lat & {:keys [include-twilight precision]
-                :or {precision 0.1}}]
+                        :or {precision 0.1}}]
   (let [lat (conv/deg->rad lat)
         ; adjust standard altitude to include twilight if desired
         std-alt (condp = include-twilight
@@ -155,69 +154,68 @@
         ra1 (if (> ra1 ra2) (- ra1 360) ra1)
         ra3 (if (< ra3 ra2) (+ ra3 360) ra3)
         ;; get declinations, radians
-        [decl1 decl2 decl3] (map #(:declination %) coords)
+        [decl1 decl2 decl3] (map :declination coords)
         ;; approximate hour angle, degrees [1] Eqn (15.1)
         cos-ha (/ (- (Math/sin (conv/deg->rad std-alt))
                      (* (Math/sin lat) (Math/sin decl2)))
                   (* (Math/cos lat) (Math/cos decl2)))
         ;; force hour angle into range [0 180]
         ha (cond
-             (> cos-ha 1) 0
-             (< cos-ha -1) (conv/rad->deg (Math/acos -1))
-             :default (conv/rad->deg (Math/acos cos-ha)))
+            (> cos-ha 1) 0
+            (< cos-ha -1) (conv/rad->deg (Math/acos -1))
+            :default (conv/rad->deg (Math/acos cos-ha)))
         ;; approximate m, fraction of days
         ;; for rising, transit, setting [1] Eqn (15.2)
         ;; take out any day boundaries we crossed
         separate-days (fn [m] (let [m_ (mod m 1)] [m_ (- m_ m)]))
         [m0 d0] (-> (/ (- ra2 lon theta_0) 360) ; transit
-                  separate-days)
+                    separate-days)
         separate-days (fn [m] (let [m_ (mod m 1)] [m_ (- m m_)]))
         [m1 d1] (-> (- m0 (/ ha 360)) ; rising
-                  separate-days)
+                    separate-days)
         [m2 d2] (-> (+ m0 (/ ha 360)) ; setting
-                  separate-days)]
-        ;; interpolate right-ascension & declination to adjust m values
-        (letfn [(interp-m
-                  [idx m]
-                  (binding [*warn-on-reflection* true]
-                    (let [n (+ m (/ (.getMillis ^org.joda.time.Period (delta-t dt))
-                                    DateTimeConstants/MILLIS_PER_DAY))
-                          ra (interpolate ra1 ra2 ra3 n)
-                          decl (interpolate decl1 decl2 decl3 n)
-                          ; apparent sidereal time, degrees [1] Ch.15
-                          theta (+ theta_0 (* 360.985647 m))
-                          ; local hour angle, degrees [1] Ch.15
-                          h (+ theta lon (- ra))]
-                      (if (= idx 0)
-                        ; transit
-                        (/ h -360) ; [1] Ch.15
-                        ; rising or setting
-                        ; get altitude, degrees [1] Eqn (13.6)
-                        (let [alt (-> (Math/asin (+ (* (Math/sin lat)
-                                                       (Math/sin decl))
-                                                    (* (Math/cos lat)
-                                                       (Math/cos decl)
-                                                       (Math/cos (conv/deg->rad h)))))
-                                    conv/rad->deg)]
-                          (/ (- alt std-alt)
-                             (* 360 (Math/cos decl) (Math/cos lat)
-                                (Math/sin (conv/deg->rad h)))))))))] ; [1] Ch.15
-          (let [[m0 m1 m2] (loop [ms [m0 m1 m2]]
-                             (let [ms (vec ms)
-                                   delta-ms (vec (map-indexed interp-m ms))
-                                   new-ms (for [i (range 3)]
-                                            (+ (get ms i) (get delta-ms i)))]
-                               ;; recur if any delta-ms are outside our precision
-                               (if-not (some true? (map #(> (Math/abs ^double %)
-                                                            (/ precision 360)) ; deg->days
-                                                        delta-ms))
-                                 new-ms
-                                 (recur new-ms))))
-                ;; done! return UTC datetimes
-                transit (ct/plus dt (ct/millis (* (+ m0 d0) DateTimeConstants/MILLIS_PER_DAY)))
-                rising (ct/plus dt (ct/millis (* (+ m1 d1) DateTimeConstants/MILLIS_PER_DAY)))
-                setting (ct/plus dt (ct/millis (* (+ m2 d2) DateTimeConstants/MILLIS_PER_DAY)))]
-            {:transit transit
-             :rising rising
-             :setting setting}))))
-
+                    separate-days)]
+    ;; interpolate right-ascension & declination to adjust m values
+    (letfn [(interp-m
+              [idx m]
+              (binding [*warn-on-reflection* true]
+                (let [n (+ m (/ (.getMillis ^org.joda.time.Period (delta-t dt))
+                                DateTimeConstants/MILLIS_PER_DAY))
+                      ra (interpolate ra1 ra2 ra3 n)
+                      decl (interpolate decl1 decl2 decl3 n)
+                      ; apparent sidereal time, degrees [1] Ch.15
+                      theta (+ theta_0 (* 360.985647 m))
+                      ; local hour angle, degrees [1] Ch.15
+                      h (+ theta lon (- ra))]
+                  (if (zero? idx)
+                    ; transit
+                    (/ h -360) ; [1] Ch.15
+                    ; rising or setting
+                    ; get altitude, degrees [1] Eqn (13.6)
+                    (let [alt (-> (Math/asin (+ (* (Math/sin lat)
+                                                   (Math/sin decl))
+                                                (* (Math/cos lat)
+                                                   (Math/cos decl)
+                                                   (Math/cos (conv/deg->rad h)))))
+                                  conv/rad->deg)]
+                      (/ (- alt std-alt)
+                         (* 360 (Math/cos decl) (Math/cos lat)
+                            (Math/sin (conv/deg->rad h)))))))))] ; [1] Ch.15
+      (let [[m0 m1 m2] (loop [ms [m0 m1 m2]]
+                         (let [ms (vec ms)
+                               delta-ms (vec (map-indexed interp-m ms))
+                               new-ms (for [i (range 3)]
+                                        (+ (get ms i) (get delta-ms i)))]
+                           ;; recur if any delta-ms are outside our precision
+                           (if-not (some true? (map #(> (Math/abs ^double %)
+                                                        (/ precision 360)) ; deg->days
+                                                    delta-ms))
+                             new-ms
+                             (recur new-ms))))
+            ;; done! return UTC datetimes
+            transit (ct/plus dt (ct/millis (* (+ m0 d0) DateTimeConstants/MILLIS_PER_DAY)))
+            rising (ct/plus dt (ct/millis (* (+ m1 d1) DateTimeConstants/MILLIS_PER_DAY)))
+            setting (ct/plus dt (ct/millis (* (+ m2 d2) DateTimeConstants/MILLIS_PER_DAY)))]
+        {:transit transit
+         :rising rising
+         :setting setting}))))

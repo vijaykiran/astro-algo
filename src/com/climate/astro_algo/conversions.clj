@@ -20,9 +20,9 @@
   ; based on [1] Ch.1
   [hours minutes seconds]
   (let [total-hours (-> (/ seconds 60)
-                      (+ minutes)
-                      (/ 60)
-                      (+ hours))]
+                        (+ minutes)
+                        (/ 60)
+                        (+ hours))]
     (* total-hours 15)))
 
 (defn angle->deg
@@ -30,6 +30,6 @@
   ; based on [1] Ch.1
   [degrees arcminutes arcseconds]
   (-> (/ arcseconds 60)
-    (+ arcminutes)
-    (/ 60)
-    (+ degrees)))
+      (+ arcminutes)
+      (/ 60)
+      (+ degrees)))
